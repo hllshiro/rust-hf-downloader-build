@@ -81,7 +81,6 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            source/target
           key: ${{ matrix.target }}-cargo-${{ inputs.version }}
           restore-keys: |
             ${{ matrix.target }}-cargo-
