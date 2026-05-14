@@ -94,11 +94,15 @@ jobs:
           # crates.io 解压后目录名格式: rust-hf-downloader-{version}
           mv "rust-hf-downloader-${{ inputs.version }}" source
 
+      - name: Generate lockfile (crates.io source doesn't include Cargo.lock)
+        working-directory: source
+        run: cargo generate-lockfile
+
       - name: Build release binary
         working-directory: source
         run: |
           echo "Building for target: ${{ matrix.target }}"
-          cargo build --release --locked --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Verify binary exists
         working-directory: source
