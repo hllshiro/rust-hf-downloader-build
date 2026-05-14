@@ -115,9 +115,9 @@ jobs:
             exit 1
           fi
 
-      - name: Package (Linux/macOS)
+      - name: Package (Linux)
         id: package
-        if: matrix.archive_ext == 'tar.gz'
+        if: runner.os == 'Linux'
         working-directory: source
         run: |
           BINARY_PATH="target/${{ matrix.target }}/release/rust-hf-downloader${{ matrix.exe }}"
@@ -125,6 +125,18 @@ jobs:
           tar -czf "../${ARCHIVE_NAME}" -C "target/${{ matrix.target }}/release" "rust-hf-downloader${{ matrix.exe }}"
           cd ..
           sha256sum "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha256"
+          echo "Archive: ${ARCHIVE_NAME}"
+          cat "${ARCHIVE_NAME}.sha256"
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        working-directory: source
+        run: |
+          BINARY_PATH="target/${{ matrix.target }}/release/rust-hf-downloader${{ matrix.exe }}"
+          ARCHIVE_NAME="rust-hf-downloader-v${{ inputs.version }}-${{ matrix.target_name }}.tar.gz"
+          tar -czf "../${ARCHIVE_NAME}" -C "target/${{ matrix.target }}/release" "rust-hf-downloader${{ matrix.exe }}"
+          cd ..
+          shasum -a 256 "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha256"
           echo "Archive: ${ARCHIVE_NAME}"
           cat "${ARCHIVE_NAME}.sha256"
 
