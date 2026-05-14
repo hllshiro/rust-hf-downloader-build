@@ -1,4 +1,4 @@
-# build.yml - 可复用的 Rust 编译工作流
+# build.yml - 可复用的 Rust 编译工作流（仅编译，不含发布）
 name: Build
 
 on:
@@ -8,19 +8,17 @@ on:
         description: '要编译的 crates.io 版本号'
         required: true
         type: string
-      publish_release:
-        description: '是否发布 Release'
-        required: false
-        default: true
-        type: boolean
-    secrets:
-      GH_TOKEN:
-        required: false
+    outputs:
+      artifacts:
+        description: '构建产物列表'
+        value: ${{ jobs.build.outputs.artifacts }}
 
 jobs:
   build:
     name: Build ${{ matrix.target_name }}
     runs-on: ${{ matrix.os }}
+    outputs:
+      artifacts: ${{ steps.package.outputs.artifacts }}
     strategy:
       fail-fast: false
       matrix:
@@ -77,17 +75,14 @@ jobs:
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
-      - name: Install cargo-audit (optional)
-        run: cargo install cargo-audit
-
       - name: Cache Rust dependencies
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: ${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            source/target
+          key: ${{ matrix.target }}-cargo-${{ inputs.version }}
           restore-keys: |
             ${{ matrix.target }}-cargo-
 
@@ -98,11 +93,6 @@ jobs:
           tar -xzf source.tar.gz
           # crates.io 解压后目录名格式: rust-hf-downloader-{version}
           mv "rust-hf-downloader-${{ inputs.version }}" source
-
-      - name: Rename source to Cargo.toml context
-        run: |
-          # 确保 Cargo.toml 在正确位置
-          ls -la source/
 
       - name: Build release binary
         working-directory: source
@@ -126,6 +116,7 @@ jobs:
           fi
 
       - name: Package (Linux/macOS)
+        id: package
         if: matrix.archive_ext == 'tar.gz'
         working-directory: source
         run: |
@@ -158,30 +149,3 @@ jobs:
           path: |
             rust-hf-downloader-v${{ inputs.version }}-${{ matrix.target_name }}.*
           retention-days: 5
-
-  create-release:
-    name: Create Release
-    needs: build
-    if: inputs.publish_release
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: List artifacts
-        run: find artifacts -type f | sort
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ inputs.version }}
-          name: rust-hf-downloader v${{ inputs.version }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: |
-            artifacts/**/*

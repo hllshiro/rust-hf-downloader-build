@@ -1,12 +1,10 @@
-# check-and-build.yml - 自动检测 crates.io 新版本并触发编译
+# check-and-build.yml - 自动检测 crates.io 新版本并编译发布
 name: Check & Build
 
 on:
-  # 每 6 小时检查一次
   schedule:
     - cron: '0 */6 * * *'
 
-  # 手动触发时检查
   workflow_dispatch:
     inputs:
       force_build:
@@ -16,7 +14,8 @@ on:
         type: boolean
 
 jobs:
-  check-and-build:
+  check:
+    name: Check crates.io
     runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.check.outputs.version }}
@@ -28,15 +27,12 @@ jobs:
       - name: Check crates.io for latest version
         id: check
         run: |
-          # 从 crates.io API 获取最新版本
           LATEST_VERSION=$(curl -s "https://crates.io/api/v1/crates/rust-hf-downloader" | jq -r '.crate.max_stable_version')
           echo "Latest version on crates.io: $LATEST_VERSION"
 
-          # 读取已编译版本
           LAST_BUILT=$(cat .last-built-version 2>/dev/null || echo "0.0.0")
           echo "Last built version: $LAST_BUILT"
 
-          # 比较版本
           if [ "$LATEST_VERSION" != "$LAST_BUILT" ] || [ "${{ github.event.inputs.force_build }}" = "true" ]; then
             echo "New version detected! $LAST_BUILT -> $LATEST_VERSION"
             echo "should_build=true" >> $GITHUB_OUTPUT
@@ -55,3 +51,39 @@ jobs:
           git add .last-built-version
           git commit -m "chore: update last-built-version to ${{ steps.check.outputs.version }}"
           git push
+
+  build:
+    name: Build
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.check.outputs.version }}
+
+  create-release:
+    name: Create Release
+    needs: [check, build]
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: rust-hf-downloader-*
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check.outputs.version }}
+          name: rust-hf-downloader v${{ needs.check.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: artifacts/*

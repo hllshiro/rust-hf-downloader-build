@@ -1,4 +1,4 @@
-# manual-build.yml - 手动触发编译
+# manual-build.yml - 手动触发编译并发布 Release
 name: Manual Build
 
 on:
@@ -43,9 +43,36 @@ jobs:
           echo "✅ Version ${{ steps.detect.outputs.version }} confirmed on crates.io"
 
   build:
-    name: Build & Release
+    name: Build
     needs: detect-version
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ needs.detect-version.outputs.version }}
-      publish_release: ${{ github.event.inputs.publish_release }}
+
+  create-release:
+    name: Create Release
+    needs: [detect-version, build]
+    if: github.event.inputs.publish_release == 'true'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: rust-hf-downloader-*
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.detect-version.outputs.version }}
+          name: rust-hf-downloader v${{ needs.detect-version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: artifacts/*
