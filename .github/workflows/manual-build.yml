@@ -1,0 +1,51 @@
+# manual-build.yml - 手动触发编译
+name: Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（如 1.4.0）。留空则自动检测最新版本。'
+        required: false
+        type: string
+      publish_release:
+        description: '发布 Release'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  detect-version:
+    name: Detect Version
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.detect.outputs.version }}
+    steps:
+      - name: Detect version
+        id: detect
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            echo "Using specified version: $VERSION"
+          else
+            VERSION=$(curl -s "https://crates.io/api/v1/crates/rust-hf-downloader" | jq -r '.crate.max_stable_version')
+            echo "Auto-detected latest version: $VERSION"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Verify version exists on crates.io
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://crates.io/api/v1/crates/rust-hf-downloader/${{ steps.detect.outputs.version }}")
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Version ${{ steps.detect.outputs.version }} not found on crates.io (HTTP $STATUS)"
+            exit 1
+          fi
+          echo "✅ Version ${{ steps.detect.outputs.version }} confirmed on crates.io"
+
+  build:
+    name: Build & Release
+    needs: detect-version
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.detect-version.outputs.version }}
+      publish_release: ${{ github.event.inputs.publish_release }}

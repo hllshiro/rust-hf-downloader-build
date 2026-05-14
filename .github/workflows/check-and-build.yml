@@ -1,0 +1,57 @@
+# check-and-build.yml - 自动检测 crates.io 新版本并触发编译
+name: Check & Build
+
+on:
+  # 每 6 小时检查一次
+  schedule:
+    - cron: '0 */6 * * *'
+
+  # 手动触发时检查
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: '强制编译（忽略版本检查）'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check crates.io for latest version
+        id: check
+        run: |
+          # 从 crates.io API 获取最新版本
+          LATEST_VERSION=$(curl -s "https://crates.io/api/v1/crates/rust-hf-downloader" | jq -r '.crate.max_stable_version')
+          echo "Latest version on crates.io: $LATEST_VERSION"
+
+          # 读取已编译版本
+          LAST_BUILT=$(cat .last-built-version 2>/dev/null || echo "0.0.0")
+          echo "Last built version: $LAST_BUILT"
+
+          # 比较版本
+          if [ "$LATEST_VERSION" != "$LAST_BUILT" ] || [ "${{ github.event.inputs.force_build }}" = "true" ]; then
+            echo "New version detected! $LAST_BUILT -> $LATEST_VERSION"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "Already built latest version."
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+          echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update last built version
+        if: steps.check.outputs.should_build == 'true'
+        run: |
+          echo "${{ steps.check.outputs.version }}" > .last-built-version
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .last-built-version
+          git commit -m "chore: update last-built-version to ${{ steps.check.outputs.version }}"
+          git push

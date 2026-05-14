@@ -1,0 +1,14 @@
+# Build artifacts
+*.exe
+*.tar.gz
+*.zip
+*.sha256
+*.md5
+*.sig
+
+# Rust toolchain
+rust-toolchain
+
+# OS files
+.DS_Store
+Thumbs.db
