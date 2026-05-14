@@ -15,8 +15,6 @@ A Terminal User Interface (TUI) application for searching, browsing, and downloa
 | Windows | x64 | `.zip` |
 | Linux | x64 | `.tar.gz` |
 | Linux | ARM64 | `.tar.gz` |
-| macOS | x64 | `.tar.gz` |
-| macOS | ARM64 | `.tar.gz` |
 
 ## Build Trigger
 
